@@ -618,7 +618,7 @@ fun LibraryScreen(
                 val userId = settings.getUserId()
                 if (userId.isNotEmpty()) {
                     likedTracks = api.fetchLikedTracks(userId)
-                    playlists = api.fetchPlaylists(userId).map { it.toAlbum }
+                    playlists = api.fetchPlaylists(userId).map { it.toAlbum() }
                 }
             } catch (e: Exception) {
                 Log.e("LibraryScreen", "Error: ${e.message}")
