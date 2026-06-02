@@ -206,14 +206,14 @@ fun PlayerScreen(
                 ) {
                     IconButton(onClick = { player.toggleShuffle() }) {
                         Icon(
-                            Icons.Default.Refresh, // Placeholder for Shuffle
+                            Icons.Default.Shuffle,
                             contentDescription = "Перемешать",
                             tint = if (isShuffled) Color.White else MutedText
                         )
                     }
 
                     IconButton(onClick = { player.previous() }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(32.dp)) // Rotated placeholder
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "Назад", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
 
                     Box(
@@ -225,7 +225,7 @@ fun PlayerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Close else Icons.Default.PlayArrow,
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Воспроизведение",
                             tint = Color.Black,
                             modifier = Modifier.size(36.dp)
@@ -233,12 +233,12 @@ fun PlayerScreen(
                     }
 
                     IconButton(onClick = { player.next() }) {
-                        Icon(Icons.Default.ArrowForward, contentDescription = "Вперед", tint = Color.White, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.SkipNext, contentDescription = "Вперед", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
 
                     IconButton(onClick = { player.toggleRepeat() }) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = Icons.Default.Repeat,
                             contentDescription = "Повтор",
                             tint = when (repeatMode) {
                                 androidx.media3.common.Player.REPEAT_MODE_ALL -> Color.White

@@ -38,6 +38,14 @@ import com.prism.music.ui.theme.DarkBackground
 import com.prism.music.ui.theme.DarkSurface
 import com.prism.music.ui.theme.MutedText
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import com.prism.music.data.model.TrackSource
+import com.prism.music.data.model.proxyArtworkURL
+import com.prism.music.ui.components.ImmersiveBackground
+import android.widget.Toast
+import android.util.Log
+import androidx.compose.ui.text.style.TextAlign
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector?) {
     object Login : Screen("login", "Login", null)
@@ -81,116 +89,129 @@ fun AppNavigation(
         }
     }
 
-    Scaffold(
-        bottomBar = {
-            if (currentRoute != Screen.Login.route) {
-                Column {
-                    // MiniPlayer overlay
-                    AnimatedVisibility(
-                        visible = currentTrack != null,
-                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-                    ) {
-                        currentTrack?.let { track ->
-                            MiniPlayer(
-                                track = track,
-                                isPlaying = isPlaying,
-                                settings = settings,
-                                onPlayPauseClick = { player.togglePlay() },
-                                onNextClick = { player.next() },
-                                onClick = { isPlayerExpanded = true }
-                            )
-                        }
-                    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        ImmersiveBackground(player = player, settings = settings)
 
-                    // Navigation BottomBar
-                    NavigationBar(
-                        containerColor = DarkSurface,
-                        contentColor = Color.White
-                    ) {
-                        val items = listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings)
-                        items.forEach { item ->
-                            NavigationBarItem(
-                                icon = { Icon(item.icon!!, contentDescription = item.title) },
-                                label = { Text(item.title) },
-                                selected = currentRoute == item.route,
-                                onClick = {
-                                    navController.navigate(item.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color.Black,
-                                    selectedTextColor = Color.White,
-                                    unselectedIconColor = MutedText,
-                                    unselectedTextColor = MutedText,
-                                    indicatorColor = Color.White
+        Scaffold(
+            containerColor = Color.Transparent,
+            bottomBar = {
+                if (currentRoute != Screen.Login.route) {
+                    Column {
+                        // MiniPlayer overlay
+                        AnimatedVisibility(
+                            visible = currentTrack != null,
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                        ) {
+                            currentTrack?.let { track ->
+                                MiniPlayer(
+                                    track = track,
+                                    isPlaying = isPlaying,
+                                    settings = settings,
+                                    onPlayPauseClick = { player.togglePlay() },
+                                    onNextClick = { player.next() },
+                                    onClick = { isPlayerExpanded = true }
                                 )
-                            )
+                            }
                         }
-                    }
-                }
-            }
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            NavHost(
-                navController = navController,
-                startDestination = startDest
-            ) {
-                composable(Screen.Login.route) {
-                    LoginScreen(api, settings) {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
-                    }
-                }
-                composable(Screen.Home.route) {
-                    HomeScreen(api, settings, player) { album ->
-                        activeDetailedAlbum = album
-                        navController.navigate(Screen.AlbumDetail.route)
-                    }
-                }
-                composable(Screen.Search.route) {
-                    SearchScreen(api, player, settings)
-                }
-                composable(Screen.Library.route) {
-                    LibraryScreen(api, player, settings)
-                }
-                composable(Screen.Settings.route) {
-                    SettingsScreen(settings) {
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
-                }
-                composable(Screen.AlbumDetail.route) {
-                    activeDetailedAlbum?.let { album ->
-                        AlbumDetailView(album = album, settings = settings, player = player) {
-                            navController.popBackStack()
-                        }
-                    }
-                }
-            }
-        }
-    }
 
-    // Modal Expandable Player Screen
-    AnimatedVisibility(
-        visible = isPlayerExpanded,
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-    ) {
-        PlayerScreen(player = player, settings = settings) {
-            isPlayerExpanded = false
+                        // Navigation BottomBar (iOS Glassmorphism style)
+                        Column {
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+                            NavigationBar(
+                                containerColor = Color.Black.copy(alpha = 0.5f),
+                                contentColor = Color.White,
+                                tonalElevation = 0.dp,
+                                modifier = Modifier.background(Color.Transparent)
+                            ) {
+                                val items = listOf(Screen.Home, Screen.Search, Screen.Library, Screen.Settings)
+                                items.forEach { item ->
+                                    NavigationBarItem(
+                                        icon = { Icon(item.icon!!, contentDescription = item.title) },
+                                        label = { Text(item.title) },
+                                        selected = currentRoute == item.route,
+                                        onClick = {
+                                            navController.navigate(item.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = Color.White,
+                                            selectedTextColor = Color.White,
+                                            unselectedIconColor = MutedText.copy(alpha = 0.6f),
+                                            unselectedTextColor = MutedText.copy(alpha = 0.6f),
+                                            indicatorColor = Color.Transparent // Removes the Material 3 oval background pill
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = startDest
+                ) {
+                    composable(Screen.Login.route) {
+                        LoginScreen(api, settings) {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        }
+                    }
+                    composable(Screen.Home.route) {
+                        HomeScreen(api, settings, player) { album ->
+                            activeDetailedAlbum = album
+                            navController.navigate(Screen.AlbumDetail.route)
+                        }
+                    }
+                    composable(Screen.Search.route) {
+                        SearchScreen(api, player, settings)
+                    }
+                    composable(Screen.Library.route) {
+                        LibraryScreen(api, player, settings) { album ->
+                            activeDetailedAlbum = album
+                            navController.navigate(Screen.AlbumDetail.route)
+                        }
+                    }
+                    composable(Screen.Settings.route) {
+                        SettingsScreen(settings) {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+                    composable(Screen.AlbumDetail.route) {
+                        activeDetailedAlbum?.let { album ->
+                            AlbumDetailView(album = album, settings = settings, api = api, player = player) {
+                                navController.popBackStack()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Modal Expandable Player Screen
+        AnimatedVisibility(
+            visible = isPlayerExpanded,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
+            PlayerScreen(player = player, settings = settings) {
+                isPlayerExpanded = false
+            }
         }
     }
 }
@@ -247,14 +268,14 @@ fun MiniPlayer(
         Spacer(modifier = Modifier.width(8.dp))
         IconButton(onClick = onPlayPauseClick) {
             Icon(
-                imageVector = if (isPlaying) Icons.Default.Close else Icons.Default.PlayArrow, // Close represents Pause in mini player
+                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = "Воспроизведение",
                 tint = Color.White
             )
         }
         IconButton(onClick = onNextClick) {
             Icon(
-                imageVector = Icons.Default.ArrowForward,
+                imageVector = Icons.Default.SkipNext,
                 contentDescription = "Вперед",
                 tint = Color.White
             )
@@ -263,90 +284,367 @@ fun MiniPlayer(
 }
 
 // --- ALBUM DETAIL VIEW ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumDetailView(
     album: Album,
     settings: SettingsStore,
+    api: APIClient,
     player: AudioPlayer,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val backendURL by settings.backendURL.collectAsState(initial = SettingsStore.DEFAULT_BACKEND_URL)
-    val tracks = album.tracks ?: emptyList()
+    val userId by settings.userId.collectAsState(initial = "")
+    val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground)
-    ) {
-        // Top bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Назад", tint = Color.White)
+    var tracks by remember { mutableStateOf<List<Track>?>(album.tracks) }
+    var isLoading by remember { mutableStateOf(album.tracks == null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Dialog state for editing playlist properties
+    var isEditing by remember { mutableStateOf(false) }
+    var editName by remember { mutableStateOf(album.title) }
+    var editDesc by remember { mutableStateOf(album.artist) }
+    var editCover by remember { mutableStateOf(album.cover ?: "") }
+    var isSaving by remember { mutableStateOf(false) }
+
+    // Playlist details that can change dynamically on edit
+    var playlistTitle by remember { mutableStateOf(album.title) }
+    var playlistDescription by remember { mutableStateOf(album.artist) }
+    var playlistCover by remember { mutableStateOf(album.cover ?: "") }
+
+    LaunchedEffect(album.id) {
+        if (album.tracks == null) {
+            isLoading = true
+            errorMessage = null
+            try {
+                val fetched = if (album.source == TrackSource.other) {
+                    if (userId.isNotEmpty()) {
+                        api.fetchUserPlaylistTracks(userId, album.id)
+                    } else {
+                        emptyList()
+                    }
+                } else {
+                    api.playlistTracks(album.id, album.source?.value ?: "soundcloud")
+                }
+                tracks = fetched
+            } catch (e: Exception) {
+                errorMessage = "Не удалось загрузить треки"
+                Log.e("AlbumDetailView", "Error: ${e.message}")
+            } finally {
+                isLoading = false
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Детали", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        }
+    }
+
+    var userPlaylists by remember { mutableStateOf<List<Album>>(emptyList()) }
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
+            try {
+                userPlaylists = api.fetchPlaylists(userId).map { it.toAlbum() }
+            } catch (e: Exception) {
+                Log.e("AlbumDetailView", "Failed to fetch playlists: ${e.message}")
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Blurred artwork backdrop
+        if (playlistCover.isNotEmpty()) {
+            AsyncImage(
+                model = proxyArtworkURL(playlistCover, backendURL),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(60.dp),
+                contentScale = ContentScale.Crop,
+                alpha = 0.45f
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Black.copy(alpha = 0.85f)
+                            )
+                        )
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                DarkBackground,
+                                Color(0xFF0F0F12)
+                            )
+                        )
+                    )
+            )
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
         ) {
-            // Album Metadata Header
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AsyncImage(
-                        model = album.getArtworkURL(backendURL) ?: "https://pm.standrise.net/icons/default_cover.png",
-                        contentDescription = album.title,
+            // Top bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад", tint = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Детали", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+
+                if (album.source == TrackSource.other) {
+                    IconButton(onClick = { isEditing = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Редактировать", tint = Color.White)
+                    }
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Album Metadata Header
+                item {
+                    Row(
                         modifier = Modifier
-                            .size(100.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(album.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Text(album.artist, color = MutedText, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (tracks.isNotEmpty()) {
-                            Button(
-                                onClick = { player.play(tracks, 0) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Слушать")
+                            .fillMaxWidth()
+                            .padding(bottom = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AsyncImage(
+                            model = proxyArtworkURL(playlistCover.ifEmpty { null }, backendURL) ?: "https://pm.standrise.net/icons/default_cover.png",
+                            contentDescription = playlistTitle,
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(playlistTitle, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text(playlistDescription, color = MutedText, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (tracks != null && tracks!!.isNotEmpty()) {
+                                Button(
+                                    onClick = { player.play(tracks!!, 0) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Слушать")
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Track list
-            if (tracks.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color.White)
+                // Track list
+                if (isLoading) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
                     }
-                }
-            } else {
-                items(tracks) { track ->
-                    TrackRow(track = track, backendURL = backendURL) {
-                        player.play(tracks, tracks.indexOf(track))
+                } else if (errorMessage != null) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Yellow, modifier = Modifier.size(36.dp))
+                            Text(errorMessage!!, color = MutedText, textAlign = TextAlign.Center)
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isLoading = true
+                                        errorMessage = null
+                                        try {
+                                            val fetched = if (album.source == TrackSource.other) {
+                                                api.fetchUserPlaylistTracks(userId, album.id)
+                                            } else {
+                                                api.playlistTracks(album.id, album.source?.value ?: "soundcloud")
+                                            }
+                                            tracks = fetched
+                                        } catch (e: Exception) {
+                                            errorMessage = "Не удалось загрузить треки"
+                                        } finally {
+                                            isLoading = false
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                            ) {
+                                Text("Повторить")
+                            }
+                        }
+                    }
+                } else if (tracks == null || tracks!!.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.List,
+                                contentDescription = null,
+                                tint = MutedText,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text("Нет треков", color = MutedText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    items(tracks!!) { track ->
+                        TrackRow(
+                            track = track,
+                            backendURL = backendURL,
+                            playlists = userPlaylists,
+                            currentPlaylistId = album.id,
+                            onPlaylistChanged = {
+                                // Reload tracks
+                                scope.launch {
+                                    try {
+                                        tracks = if (album.source == TrackSource.other) {
+                                            api.fetchUserPlaylistTracks(userId, album.id)
+                                        } else {
+                                            api.playlistTracks(album.id, album.source?.value ?: "soundcloud")
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("AlbumDetailView", "Reload failed: ${e.message}")
+                                    }
+                                }
+                            },
+                            onPlay = {
+                                player.play(tracks!!, tracks!!.indexOf(track))
+                            }
+                        )
                     }
                 }
             }
         }
+    }
+
+    // Edit Playlist Dialog
+    if (isEditing) {
+        AlertDialog(
+            onDismissRequest = { isEditing = false },
+            title = { Text("Редактировать плейлист", color = Color.White) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("Название") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                    OutlinedTextField(
+                        value = editDesc,
+                        onValueChange = { editDesc = it },
+                        label = { Text("Описание") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                    OutlinedTextField(
+                        value = editCover,
+                        onValueChange = { editCover = it },
+                        label = { Text("Ссылка на обложку (необязательно)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            val name = editName.trim()
+                            if (name.isNotEmpty()) {
+                                isSaving = true
+                                scope.launch {
+                                    try {
+                                        val updated = api.updatePlaylist(
+                                            playlistId = album.id,
+                                            name = name,
+                                            description = editDesc.trim().ifEmpty { null },
+                                            coverUrl = editCover.trim().ifEmpty { null }
+                                        )
+                                        playlistTitle = updated.name
+                                        playlistDescription = updated.description ?: "Мой плейлист"
+                                        playlistCover = updated.coverUrl ?: ""
+                                        isEditing = false
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        isSaving = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                    ) {
+                        if (isSaving) CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp))
+                        else Text("Сохранить")
+                    }
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    val success = api.deletePlaylist(album.id)
+                                    if (success) {
+                                        isEditing = false
+                                        onBack()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A), contentColor = Color.White)
+                    ) {
+                        Text("Удалить плейлист")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { isEditing = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+                ) {
+                    Text("Отмена")
+                }
+            },
+            containerColor = DarkSurface
+        )
     }
 }

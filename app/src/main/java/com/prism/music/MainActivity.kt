@@ -23,12 +23,13 @@ class MainActivity : ComponentActivity() {
         val settings = app.settingsStore
         val player = app.audioPlayer
 
-        // Start background media service to ensure playback works in background
+        // Start background media service. Media3 automatically elevates it to foreground when playback starts
         val intent = Intent(this, PrismPlaybackService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        startService(intent)
+
+        // Request notification permissions for playback control on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
         }
 
         setContent {

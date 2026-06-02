@@ -17,6 +17,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 
+class ClientErrorException(message: String) : Exception(message)
+
 class APIClient(private val context: Context, private val settings: SettingsStore) {
 
     private val json = Json {
@@ -95,6 +97,9 @@ class APIClient(private val context: Context, private val settings: SettingsStor
             val request = requestBuilder.build()
             try {
                 client.newCall(request).execute().use { response ->
+                    if (response.code in 400..499) {
+                        throw ClientErrorException("Client error: ${response.code} ${response.message}")
+                    }
                     if (response.code >= 500) {
                         throw IOException("Server error: ${response.code}")
                     }
@@ -104,6 +109,8 @@ class APIClient(private val context: Context, private val settings: SettingsStor
                     val bodyString = response.body?.string() ?: throw IOException("Empty response body")
                     return@withContext decodeBlock(bodyString)
                 }
+            } catch (e: ClientErrorException) {
+                throw e
             } catch (e: Exception) {
                 Log.w("APIClient", "Request failed on host $currentHost: ${e.message}. Retrying...")
                 lastException = e
@@ -312,5 +319,93 @@ class APIClient(private val context: Context, private val settings: SettingsStor
             val res = json.decodeFromString<PlaylistSuccessResponse>(body)
             res.success
         }
+    }
+
+    suspend fun fetchPlaylists(userId: String): List<UserPlaylistDTO> {
+        return executeWithFailover(
+            path = "/api/library/playlists",
+            queryParams = mapOf("userId" to userId)
+        ) { body ->
+            json.decodeFromString<List<UserPlaylistDTO>>(body)
+        }
+    }
+
+    suspend fun createPlaylist(userId: String, name: String, description: String? = null): UserPlaylistDTO {
+        val descStr = if (description != null) ",\"description\":\"${description.replace("\"", "\\\"")}\"" else ""
+        val bodyStr = "{\"userId\":\"$userId\",\"name\":\"${name.replace("\"", "\\\"")}\"$descStr}"
+        return executeWithFailover(
+            path = "/api/library/playlists",
+            method = "POST",
+            bodyJson = bodyStr
+        ) { body ->
+            json.decodeFromString(UserPlaylistDTO.serializer(), body)
+        }
+    }
+
+    suspend fun deletePlaylist(playlistId: String): Boolean {
+        return executeWithFailover(
+            path = "/api/library/playlists",
+            method = "DELETE",
+            queryParams = mapOf("id" to playlistId)
+        ) { body ->
+            val res = json.decodeFromString<PlaylistSuccessResponse>(body)
+            res.success
+        }
+    }
+
+    suspend fun addTrackToPlaylist(playlistId: String, track: Track): Boolean {
+        val trackCover = track.cover ?: ""
+        val trackDuration = track.durationSeconds?.toInt() ?: 0
+        val trackSource = track.source?.value ?: "unknown"
+        val bodyStr = """
+            {
+                "playlistId": "$playlistId",
+                "track": {
+                    "id": "${track.id}",
+                    "title": "${track.title.replace("\"", "\\\"")}",
+                    "artist": "${track.artist.replace("\"", "\\\"")}",
+                    "coverUrl": "$trackCover",
+                    "duration": $trackDuration,
+                    "source": "$trackSource"
+                }
+            }
+        """.trimIndent()
+
+        return executeWithFailover(
+            path = "/api/library/playlists/tracks",
+            method = "POST",
+            bodyJson = bodyStr
+        ) { body ->
+            body.contains("success") || body.contains("Track already")
+        }
+    }
+
+    suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String): Boolean {
+        return executeWithFailover(
+            path = "/api/library/playlists/tracks",
+            method = "DELETE",
+            queryParams = mapOf("playlistId" to playlistId, "trackId" to trackId)
+        ) { body ->
+            body.contains("success")
+        }
+    }
+
+    suspend fun updatePlaylist(playlistId: String, name: String, description: String?, coverUrl: String?): UserPlaylistDTO {
+        val descStr = if (description != null) ",\"description\":\"${description.replace("\"", "\\\"")}\"" else ""
+        val coverStr = if (coverUrl != null) ",\"coverUrl\":\"${coverUrl.replace("\"", "\\\"")}\"" else ""
+        val bodyStr = "{\"id\":\"$playlistId\",\"name\":\"${name.replace("\"", "\\\"")}\"$descStr$coverStr}"
+        return executeWithFailover(
+            path = "/api/library/playlists",
+            method = "PATCH",
+            bodyJson = bodyStr
+        ) { body ->
+            json.decodeFromString(UserPlaylistDTO.serializer(), body)
+        }
+    }
+
+    suspend fun fetchUserPlaylistTracks(userId: String, playlistId: String): List<Track> {
+        val allPlaylists = fetchPlaylists(userId)
+        val matching = allPlaylists.firstOrNull { it.id == playlistId }
+        return matching?.tracks ?: emptyList()
     }
 }

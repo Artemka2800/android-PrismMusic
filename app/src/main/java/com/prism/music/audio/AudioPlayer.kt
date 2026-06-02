@@ -267,6 +267,60 @@ class AudioPlayer private constructor(
         }
     }
 
+    fun findAndReplace(track: Track, targetSource: TrackSource, onCompletion: (String) -> Unit) {
+        scope.launch {
+            try {
+                val results = api.findTrack(
+                    title = track.title,
+                    artist = track.artist,
+                    targetSource = targetSource.value
+                )
+                val matched = results.firstOrNull()
+                if (matched == null) {
+                    onCompletion("Трек не найден на ${targetSource.label}")
+                    return@launch
+                }
+                
+                val newId = "${targetSource.value}:${matched.id}"
+                val replacedTrack = Track(
+                    id = newId,
+                    title = matched.title,
+                    artist = matched.artist,
+                    album = matched.album ?: track.album,
+                    durationSeconds = matched.durationSeconds ?: track.durationSeconds,
+                    cover = matched.cover ?: track.cover,
+                    streamURL = matched.streamURL ?: track.streamURL,
+                    source = targetSource
+                )
+                
+                // If it was liked, replace it on server
+                val userId = settings.getUserId()
+                if (userId.isNotEmpty()) {
+                    val liked = api.fetchLikedTracks(userId)
+                    if (liked.any { it.id == track.id }) {
+                        api.replaceLikedTrack(userId, track.id, replacedTrack)
+                    }
+                }
+                
+                // Replace in queue
+                replaceTrackInQueue(track.id, replacedTrack)
+                onCompletion("Трек успешно заменен на ${targetSource.label}!")
+            } catch (e: Exception) {
+                Log.e("AudioPlayer", "Find and replace failed: ${e.message}")
+                onCompletion("Ошибка замены: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    private fun startService() {
+        try {
+            val intent = android.content.Intent(context, PrismPlaybackService::class.java)
+            context.startService(intent)
+        } catch (e: Exception) {
+            Log.e("AudioPlayer", "Failed to start service: ${e.message}")
+        }
+    }
+
     private fun load(track: Track, autoplay: Boolean, isRetry: Boolean = false) {
         if (!isRetry) {
             trackLoadRetryCount = 0
@@ -277,6 +331,10 @@ class AudioPlayer private constructor(
         _isBuffering.value = true
         _lyrics.value = null
         hasTriggeredAutoNext = false
+
+        if (autoplay) {
+            startService()
+        }
 
         // Fetch lyrics
         lyricsJob?.cancel()
